@@ -1,0 +1,13 @@
+{
+  "appId": "com.surojit.eduzone",
+  "appName": "EduZone",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "FirebaseMessaging": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

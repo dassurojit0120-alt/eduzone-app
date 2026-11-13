@@ -1,0 +1,214 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isTrusted() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/trusted/$(request.auth.uid));
+    }
+
+    function isRealUser() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function notDeleted() {
+      return !exists(/databases/$(database)/documents/deleted/$(request.auth.uid));
+    }
+
+    function validSubmission() {
+      let d = request.resource.data;
+      let k = d.get('kind', 'note');
+      let base =
+        d.keys().hasOnly(['kind','status','ts','uid','by','desc','subject','type','link','chapterName','chapterNo','topicName','rKind','rGroup','rGender','rDay','rTime','rSubject','rChName','rChNo','paperType','title','marks','qbType','qbNo'])
+        && d.status == 'pending'
+        && d.uid == request.auth.uid
+        && d.ts is number
+        && k in ['note','routine','paper','qb']
+        && d.by is map
+        && d.by.keys().hasOnly(['name','role','email','school','tuition'])
+        && d.by.name is string && d.by.name.size() > 0 && d.by.name.size() < 100
+        && d.by.role in ['student','teacher']
+        && (!('desc' in d) || (d.desc is string && d.desc.size() < 301))
+        && (!('rChName' in d) || (d.rChName is string && d.rChName.size() < 141))
+        && (!('rChNo' in d) || (d.rChNo is string && d.rChNo.size() < 41));
+
+      let noteOk = k == 'note'
+        && d.subject in ['bengali','english','math','life-science','physical-science','history','geography']
+        && d.type in ['chapter','topic','grammar']
+        && d.link is string && d.link.size() < 500 && d.link.matches('https?://.*')
+        && d.chapterName is string && d.chapterName.size() < 150
+        && d.chapterNo is number && d.chapterNo >= 0
+        && d.topicName is string && d.topicName.size() < 150;
+
+      let routineOk = k == 'routine'
+        && d.rKind in ['tuition','exam','board']
+        && d.rGroup is string && d.rGroup.size() < 50
+        && d.rGender is string && d.rGender.size() < 20
+        && d.rDay is string && d.rDay.size() > 0 && d.rDay.size() < 100
+        && d.rTime is string && d.rTime.size() > 0 && d.rTime.size() < 100
+        && d.rSubject is string && d.rSubject.size() > 0 && d.rSubject.size() < 100;
+
+      let paperOk = k == 'paper'
+        && d.paperType in ['board','school','tuition']
+        && d.subject in ['bengali','english','math','life-science','physical-science','history','geography']
+        && d.title is string && d.title.size() > 0 && d.title.size() < 200
+        && d.marks is number && d.marks > 0
+        && d.link is string && d.link.size() < 500 && d.link.matches('https?://.*');
+
+      let qbOk = k == 'qb'
+        && d.qbType in ['model','suggestion']
+        && d.subject in ['bengali','english','math','life-science','physical-science','history','geography']
+        && d.title is string && d.title.size() > 0 && d.title.size() < 200
+        && d.link is string && d.link.size() < 500 && d.link.matches('https?://.*')
+        && (!('qbNo' in d) || (d.qbNo is number && d.qbNo >= 0));
+
+      return base && (noteOk || routineOk || paperOk || qbOk);
+    }
+
+    function validTrustedNote() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['subject','type','link','chapterName','chapterNo','topicName','createdAt','uid','by','desc'])
+        && d.uid == request.auth.uid
+        && d.subject in ['bengali','english','math','life-science','physical-science','history','geography']
+        && d.type in ['chapter','topic','grammar']
+        && d.link is string && d.link.size() < 500 && d.link.matches('https?://.*')
+        && d.chapterName is string && d.chapterName.size() < 150
+        && d.topicName is string && d.topicName.size() < 150
+        && d.chapterNo is number
+        && d.by is string && d.by.size() < 100
+        && (!('desc' in d) || (d.desc is string && d.desc.size() < 301))
+        && d.createdAt == request.time;
+    }
+
+    function validTrustedRoutine() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['kind','group','gender','day','time','subject','ts','uid','by','desc','chapterName','chapterNo'])
+        && d.uid == request.auth.uid
+        && d.kind in ['tuition','exam','board']
+        && d.group is string && d.group.size() < 50
+        && d.gender is string && d.gender.size() < 20
+        && d.day is string && d.day.size() > 0 && d.day.size() < 100
+        && d.time is string && d.time.size() > 0 && d.time.size() < 100
+        && d.subject is string && d.subject.size() > 0 && d.subject.size() < 100
+        && d.ts is number
+        && (!('by' in d) || (d.by is string && d.by.size() < 100))
+        && (!('desc' in d) || (d.desc is string && d.desc.size() < 301))
+        && (!('chapterName' in d) || (d.chapterName is string && d.chapterName.size() < 141))
+        && (!('chapterNo' in d) || (d.chapterNo is string && d.chapterNo.size() < 41));
+    }
+
+    function validTrustedPaper() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['type','subject','title','marks','link','ts','uid','by','no','desc'])
+        && d.uid == request.auth.uid
+        && d.type in ['board','school','tuition','model','suggestion']
+        && d.subject in ['bengali','english','math','life-science','physical-science','history','geography']
+        && d.title is string && d.title.size() > 0 && d.title.size() < 200
+        && d.marks is number && d.marks >= 0
+        && d.link is string && d.link.size() < 500 && d.link.matches('https?://.*')
+        && d.ts is number
+        && (!('no' in d) || (d.no is number && d.no >= 0))
+        && (!('by' in d) || (d.by is string && d.by.size() < 100))
+        && (!('desc' in d) || (d.desc is string && d.desc.size() < 301));
+    }
+
+    function validPerson() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name','role','ts'])
+        && d.name is string && d.name.size() > 0 && d.name.size() < 100
+        && d.role in ['student','teacher']
+        && d.ts is number;
+    }
+
+    function validContact() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name','location','insta','email'])
+        && d.name is string && d.name.size() < 101
+        && d.location is string && d.location.size() < 151
+        && d.insta is string && d.insta.size() < 151
+        && d.email is string && d.email.size() < 151;
+    }
+
+    function validNotices() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['items'])
+        && d.items is list && d.items.size() <= 20;
+    }
+
+    match /notes/{id} {
+      allow read: if true;
+      allow create: if isAdmin() || (isTrusted() && validTrustedNote());
+      allow update, delete: if isAdmin();
+    }
+
+    match /routines/{id} {
+      allow read: if true;
+      allow create: if isAdmin() || (isTrusted() && validTrustedRoutine());
+      allow update, delete: if isAdmin();
+    }
+
+    match /papers/{id} {
+      allow read: if true;
+      allow create: if isAdmin() || (isTrusted() && validTrustedPaper());
+      allow update, delete: if isAdmin();
+    }
+
+    match /settings/{id} {
+      allow read: if true;
+      allow create, update: if isAdmin()
+        && ((id == 'contact' && validContact()) || (id == 'notices' && validNotices()));
+      allow delete: if isAdmin();
+    }
+
+    // Created by hand in the Firebase console (document id = the admin's UID)
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /public_admins/{uid} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /submissions/{id} {
+      allow create: if isRealUser() && notDeleted() && validSubmission();
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /users/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create, update: if isRealUser() && request.auth.uid == uid && notDeleted();
+      allow delete: if isAdmin();
+    }
+
+    match /people/{uid} {
+      allow read: if true;
+      allow create: if validPerson()
+        && ((request.auth != null && request.auth.uid == uid && notDeleted()) || isAdmin());
+      allow update: if validPerson()
+        && request.resource.data.ts == resource.data.ts
+        && ((request.auth != null && request.auth.uid == uid && notDeleted()) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /trusted/{uid} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Markers for users removed by the admin (public read: the app checks it at login)
+    match /deleted/{uid} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /activity/{uid} { allow delete: if isAdmin(); }
+  }
+}
